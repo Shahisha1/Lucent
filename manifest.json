@@ -1,6 +1,13 @@
-﻿{
-  "name": "Lucent",
-  "description": "Glass theme",
-  "usercss": "user.css",
-  "isDark": true
-}
+[
+  {
+    "name": "Lucent",
+    "description": "Liquid-glass Spotify theme with an album-art backdrop, adaptive or custom accents, and customizable glass and playback settings.",
+    "main": "theme.js",
+    "readme": "README.md",
+    "tags": [
+      "theme",
+      "glass",
+      "spotify"
+    ]
+  }
+]
