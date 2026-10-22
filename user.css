@@ -1,0 +1,150 @@
+/* ============================================================
+Lucent - True Glassmorphism Spicetify Theme
+Optimized for performance (16px blur). Fully detached pill playbar.
+Scoped to native containers to prevent clashing with extensions.
+============================================================ */
+:root {
+  --vt-opacity: 0.04;
+  --vt-radius: 20px;
+  --vt-gap: 10px;
+  --vt-dim: 0.60;
+  --vt-accent: 138, 180, 255;
+  --vt-art: none;
+}
+
+/* ---------- Base & Backdrop (Sits behind everything, safe for extensions) ---------- */
+body { background: #05050a !important; color: #fff; }
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(900px 520px at 15% 0%, rgba(var(--vt-accent), 0.25), transparent 70%),
+    linear-gradient(rgba(0, 0, 0, var(--vt-dim)), rgba(0, 0, 0, var(--vt-dim))),
+    var(--vt-art) center / cover no-repeat;
+}
+
+.Root, .Root__top-container, .main-view-container, .main-topBar-background, 
+.main-home-content, .main-entityHeader-background {
+  background: transparent !important;
+}
+.Root__top-container { gap: var(--vt-gap) !important; padding: var(--vt-gap) !important; }
+
+/* ---------- True Glassmorphism Panels ---------- */
+.Root__nav-bar, .Root__main-view, .Root__right-sidebar, .Root__now-playing-bar {
+  background: rgba(255, 255, 255, var(--vt-opacity)) !important;
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--vt-radius) !important;
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.12), /* Top rim light */
+    0 8px 24px rgba(0, 0, 0, 0.25);          /* Soft depth */
+  overflow: hidden;
+}
+
+/* ---------- Detached Pill Playbar ---------- */
+.Root__now-playing-bar {
+  margin: 0 16px 16px 16px !important;
+  border-radius: 999px !important;
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    0 12px 32px rgba(0, 0, 0, 0.4);
+}
+/* Inner padding ensures controls don't hug the curved edges */
+.main-nowPlayingBar-container { 
+  padding: 0 clamp(24px, 3vw, 40px) !important; 
+  height: 100%;
+}
+
+/* ---------- Flat Surfaces & Cards ---------- */
+.main-contextMenu-menu {
+  background: rgba(20, 20, 30, 0.85) !important;
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px !important;
+}
+
+.main-card-card, .main-yourLibraryX-libraryItemContainer, .main-trackList-trackListRow {
+  border-radius: 12px !important;
+  transition: background 0.2s ease;
+}
+.main-card-card:hover, .main-yourLibraryX-libraryItemContainer:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.x-searchInput-searchInputInput {
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+/* ---------- Accents & Scrollbar ---------- */
+.main-playButton-PlayButton, .main-playPauseButton-button { background: rgb(var(--vt-accent)) !important; color: #000 !important; }
+.x-progressBar-fillColor, .progress-bar__fg { background-color: rgb(var(--vt-accent)) !important; }
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 999px; }
+
+/* ---------- Spinning Vinyl ---------- */
+@keyframes vt-spin { to { transform: rotate(360deg); } }
+.vt-vinyl .Root__now-playing-bar .main-nowPlayingBar-coverArt {
+  position: relative;
+  border-radius: 50% !important;
+  overflow: hidden;
+  box-shadow: 0 0 0 3px rgba(10,10,15,0.8), 0 0 15px rgba(0,0,0,0.5);
+}
+.vt-vinyl .Root__now-playing-bar .main-nowPlayingBar-coverArt img {
+  border-radius: 50% !important;
+  animation: vt-spin 8s linear infinite;
+  animation-play-state: paused;
+}
+.vt-vinyl.vt-playing:not(.vt-hidden) .Root__now-playing-bar .main-nowPlayingBar-coverArt img {
+  animation-play-state: running;
+  will-change: transform;
+}
+/* Vinyl grooves & center label */
+.vt-vinyl .Root__now-playing-bar .main-nowPlayingBar-coverArt::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background:
+    radial-gradient(circle, #0b0b12 0 12%, transparent 12%),
+    repeating-radial-gradient(circle, rgba(0, 0, 0, 0.3) 0 1px, transparent 1px 4px),
+    linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vt-vinyl .Root__now-playing-bar .main-nowPlayingBar-coverArt img { animation: none !important; }
+}
+
+/* ---------- Settings Panel ---------- */
+.vt-panel { display: grid; gap: 14px; min-width: 340px; color: #fff; padding: 4px 0; }
+.vt-row { display: grid; gap: 6px; }
+.vt-row label { display: flex; justify-content: space-between; align-items: center; font-size: 13px; opacity: 0.9; }
+.vt-row input[type="range"] { width: 100%; accent-color: rgb(var(--vt-accent)); }
+.vt-row select, .vt-row input[type="color"] {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border-radius: 8px;
+  padding: 6px 10px;
+  height: 32px;
+  font-size: 13px;
+}
+.vt-btn {
+  justify-self: start;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  border-radius: 999px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s;
+}
+.vt-btn:hover { background: rgba(var(--vt-accent), 0.3); }

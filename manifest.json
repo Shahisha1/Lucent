@@ -1,0 +1,8 @@
+{
+  "name": "Lucent",
+  "description": "True glassmorphism, detached pill playbar, and spinning vinyl. Optimized for performance.",
+  "usercss": "user.css",
+  "authors": ["YourName"],
+  "tags": ["glass", "glassmorphism", "pill", "vinyl", "lightweight"],
+  "isDark": true
+}
