@@ -1,7 +1,7 @@
-[
+﻿[
   {
     "name": "Lucent",
-    "description": "Liquid-glass Spotify theme with an album-art backdrop, adaptive or custom accents, and customizable glass and playback settings.",
+    "description": "Smoked-glass slabs lit from the edge: a two-tone album-art glow, a lantern-style backdrop, and tiers that stay smooth on older machines.",
     "main": "theme.js",
     "readme": "README.md",
     "tags": [

@@ -1,10 +1,15 @@
+/* Lucent: liquid glass, built to stay light.
+   Rule of thumb: the blurred backdrop is rendered ONCE (one static layer),
+   panels fake the glass with gradients + a specular rim, and real
+   backdrop-filter is only used on small/transient surfaces (playbar, menus). */
+
 :root {
   --vt-opacity: 0.14;
   --vt-radius: 20px;
   --vt-gap: 8px;
   --vt-dim: 0.55;
   --vt-accent: 138, 180, 255;
-  --vt-art: none;
+  --vt-accent2: 112, 82, 214;
 }
 html,
 body {
@@ -15,31 +20,80 @@ body {
   isolation: isolate;
   background: transparent !important;
 }
-body::before {
-  content: "";
+
+/* ---------- backdrop (single static layer, built by theme.js) ---------- */
+#lucent-bg {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background:
-    radial-gradient(
-      900px 680px at 12% 6%,
-      rgba(var(--vt-accent), 0.26),
-      transparent 72%
-    ),
-    radial-gradient(
-      780px 580px at 94% 86%,
-      rgba(112, 82, 214, 0.13),
-      transparent 72%
-    ),
-    linear-gradient(
-      rgba(5, 8, 16, calc(var(--vt-dim) * 0.84)),
-      rgba(5, 8, 16, calc(var(--vt-dim) * 0.94))
-    ),
-    var(--vt-art) center / cover no-repeat;
-  filter: saturate(1.12);
-  transform: scale(1.02);
+  overflow: hidden;
+  contain: layout paint style;
 }
+#lucent-bg .lc-layer {
+  position: absolute;
+  inset: -4%;
+  background-size: cover;
+  background-position: center;
+  filter: blur(14px) saturate(1.55) brightness(1.08);
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+#lucent-bg .lc-layer.on {
+  opacity: 1;
+}
+#lucent-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(70% 36% at 50% 104%, rgba(var(--vt-accent), 0.42), transparent 72%),
+    radial-gradient(900px 680px at 8% 0%, rgba(var(--vt-accent), 0.18), transparent 70%),
+    radial-gradient(760px 560px at 98% 12%, rgba(var(--vt-accent2), 0.16), transparent 70%),
+    radial-gradient(130% 95% at 50% 42%, transparent 58%, rgba(2, 4, 10, 0.42)),
+    linear-gradient(rgba(5, 8, 16, calc(var(--vt-dim) * 0.5)), rgba(5, 8, 16, calc(var(--vt-dim) * 0.62)));
+}
+
+/* optional aurora drift: 2 gradient blobs, transform-only (GPU), paused when idle/hidden */
+#lucent-bg .lc-aurora {
+  position: absolute;
+  inset: 0;
+  display: none;
+}
+.vt-aurora #lucent-bg .lc-aurora {
+  display: block;
+}
+.lc-aurora i {
+  position: absolute;
+  width: 60vmax;
+  height: 60vmax;
+  border-radius: 50%;
+  opacity: 0.4;
+  will-change: transform;
+  animation: lc-drift 40s ease-in-out infinite alternate paused;
+}
+.lc-aurora i:nth-child(1) {
+  left: -15vmax;
+  top: -22vmax;
+  background: radial-gradient(circle, rgba(var(--vt-accent), 0.6), transparent 65%);
+}
+.lc-aurora i:nth-child(2) {
+  right: -20vmax;
+  bottom: -26vmax;
+  background: radial-gradient(circle, rgba(var(--vt-accent2), 0.55), transparent 65%);
+  animation-duration: 56s;
+  animation-direction: alternate-reverse;
+}
+.vt-playing:not(.vt-hidden) .lc-aurora i {
+  animation-play-state: running;
+}
+@keyframes lc-drift {
+  to {
+    transform: translate3d(14vmax, 10vmax, 0) scale(1.15);
+  }
+}
+
+/* ---------- layout ---------- */
 .Root {
   position: relative;
   z-index: 1;
@@ -48,235 +102,254 @@ body::before {
 .Root,
 .Root__top-container,
 .main-view-container,
+.main-view-container__scroll-node,
 .main-view-container__scroll-node-child,
 .main-topBar-background,
 .main-home-content,
 .main-yourLibraryX-libraryContainer,
-.main-yourLibraryX-navBar {
+.main-yourLibraryX-libraryRoot,
+.main-yourLibraryX-libraryContent,
+.main-yourLibraryX-navBar,
+.main-yourLibraryX-header,
+.main-yourLibraryX-entryPoints,
+.main-nowPlayingView-nowPlayingWidget,
+.main-nowPlayingView-contextItemInfo,
+.main-nowPlayingView-lyricsContent {
   background: transparent !important;
 }
 .Root__top-container {
   gap: var(--vt-gap) !important;
   padding: var(--vt-gap) !important;
 }
-.Root__nav-bar,
-.Root__main-view,
-.Root__right-sidebar,
-.Root__now-playing-bar,
-[data-testid="left-sidebar"],
-[data-testid="main-view"],
-[data-testid="right-sidebar"],
-[data-testid="now-playing-bar"] {
-  background: linear-gradient(
-    155deg,
-    rgba(255, 255, 255, calc(0.035 + var(--vt-opacity) * 0.42)),
-    rgba(24, 31, 48, calc(0.13 + var(--vt-opacity) * 0.5)) 48%,
-    rgba(13, 19, 32, calc(0.17 + var(--vt-opacity) * 0.48))
-  ) !important;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+
+/* ---------- slabs: smoked glass, lit from the edge ----------
+   Lucent's own take on glass. Every panel is a slab of smoked glass with a hairline of
+   light running round its rim (song colour -> clear -> second tone), a tinted under-glow
+   like a lantern standing on a table, and its own colour temperature:
+   the library glows with the main accent, the main view stays calm moonlight,
+   the now-playing panel carries the second tone. Blur is used on the 3 big slabs only. */
+:root {
+  --lc-base: 0.34;
+  --lc-tint: var(--vt-accent);
+  --lc-tint2: var(--vt-accent2);
+}
+.vt-smooth {
+  --lc-base: 0.5;
+}
+html [data-lc-role="nav"] {
+  --lc-tint: var(--vt-accent);
+  --lc-tint2: var(--vt-accent2);
+}
+html [data-lc-role="main"] {
+  --lc-tint: 168, 182, 222;
+  --lc-tint2: var(--vt-accent);
+}
+html [data-lc-role="right"] {
+  --lc-tint: var(--vt-accent2);
+  --lc-tint2: var(--vt-accent);
+}
+html [data-lc-role],
+html .Root__nav-bar,
+html .Root__main-view,
+html .Root__right-sidebar,
+html .Root__now-playing-bar,
+html [data-testid="left-sidebar"],
+html [data-testid="main-view"],
+html [data-testid="right-sidebar"],
+html [data-testid="now-playing-bar"] {
+  --lc-panel-bg:
+    linear-gradient(
+      168deg,
+      rgba(var(--lc-tint), calc(0.15 + var(--vt-opacity) * 0.4)),
+      rgba(255, 255, 255, calc(0.04 + var(--vt-opacity) * 0.15)) 38%,
+      rgba(255, 255, 255, 0.015)
+    ),
+    linear-gradient(rgba(7, 10, 18, var(--lc-base)), rgba(7, 10, 18, var(--lc-base)));
+  --lc-edge: linear-gradient(
+    145deg,
+    rgba(var(--lc-tint), 0.95),
+    rgba(255, 255, 255, 0.16) 30%,
+    rgba(255, 255, 255, 0.05) 62%,
+    rgba(var(--lc-tint2), 0.7)
+  );
+  background: var(--lc-panel-bg) !important;
+  border: 0 !important;
   border-radius: var(--vt-radius) !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    inset 0 0 0 1px rgba(var(--vt-accent), 0.035),
-    0 18px 54px rgba(0, 0, 0, 0.22);
+    0 20px 44px -20px rgba(var(--lc-tint), 0.5),
+    0 10px 28px rgba(0, 0, 0, 0.26);
   overflow: hidden;
 }
+/* the rim of light: a ::before ring cut out with a mask (theme.js marks panels with data-lc-panel) */
+[data-lc-panel]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1.5px;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 2;
+  background: var(--lc-edge);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+.vt-crystal [data-lc-role],
 .vt-crystal .Root__nav-bar,
 .vt-crystal .Root__main-view,
 .vt-crystal .Root__right-sidebar,
-.vt-crystal .Root__now-playing-bar {
-  -webkit-backdrop-filter: blur(30px) saturate(165%);
-  backdrop-filter: blur(30px) saturate(165%);
-}
 .vt-crystal [data-testid="left-sidebar"],
 .vt-crystal [data-testid="main-view"],
 .vt-crystal [data-testid="right-sidebar"] {
-  -webkit-backdrop-filter: blur(30px) saturate(165%);
-  backdrop-filter: blur(30px) saturate(165%);
+  -webkit-backdrop-filter: blur(26px) saturate(170%);
+  backdrop-filter: blur(26px) saturate(170%);
 }
-.vt-crystal [data-testid="now-playing-bar"] {
-  -webkit-backdrop-filter: blur(30px) saturate(165%);
-  backdrop-filter: blur(30px) saturate(165%);
+.vt-crystal:not(.vt-pill) .Root__now-playing-bar {
+  -webkit-backdrop-filter: blur(26px) saturate(170%);
+  backdrop-filter: blur(26px) saturate(170%);
 }
-.vt-smooth .Root__nav-bar,
-.vt-smooth .Root__main-view,
-.vt-smooth .Root__right-sidebar,
-.vt-smooth .Root__now-playing-bar {
-  -webkit-backdrop-filter: blur(14px) saturate(132%);
-  backdrop-filter: blur(14px) saturate(132%);
+/* if both selectors hit nested elements, only the outer one is glass */
+.Root__main-view [data-testid="main-view"],
+.Root__nav-bar [data-testid="left-sidebar"],
+.Root__right-sidebar [data-testid="right-sidebar"],
+.Root__now-playing-bar [data-testid="now-playing-bar"] {
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }
-.vt-smooth [data-testid="left-sidebar"],
-.vt-smooth [data-testid="main-view"],
-.vt-smooth [data-testid="right-sidebar"] {
-  -webkit-backdrop-filter: blur(14px) saturate(132%);
-  backdrop-filter: blur(14px) saturate(132%);
-}
-.vt-smooth [data-testid="now-playing-bar"] {
-  -webkit-backdrop-filter: blur(14px) saturate(132%);
-  backdrop-filter: blur(14px) saturate(132%);
-}
-.vt-minimal .Root__nav-bar,
-.vt-minimal .Root__main-view,
-.vt-minimal .Root__right-sidebar,
-.vt-minimal .Root__now-playing-bar {
-  background: rgba(15, 19, 29, 0.94) !important;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  box-shadow: none;
-}
-.vt-minimal [data-testid="left-sidebar"],
-.vt-minimal [data-testid="main-view"],
-.vt-minimal [data-testid="right-sidebar"] {
-  background: rgba(15, 19, 29, 0.94) !important;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  box-shadow: none;
-}
-.vt-minimal [data-testid="now-playing-bar"] {
-  background: rgba(15, 19, 29, 0.94) !important;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  box-shadow: none;
-}
-.main-topBar-container,
-.main-topBar-background {
-  background: rgba(8, 11, 19, 0.16) !important;
-}
-.vt-crystal .main-topBar-container,
-.vt-crystal .main-topBar-background {
-  -webkit-backdrop-filter: blur(18px) saturate(145%);
-  backdrop-filter: blur(18px) saturate(145%);
-}
-.vt-smooth .main-topBar-container,
-.vt-smooth .main-topBar-background {
-  -webkit-backdrop-filter: blur(10px) saturate(125%);
-  backdrop-filter: blur(10px) saturate(125%);
-}
-.vt-minimal .main-topBar-container,
-.vt-minimal .main-topBar-background {
-  background: rgba(10, 14, 22, 0.92) !important;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
-.main-yourLibraryX-libraryContainer,
-.main-yourLibraryX-navBar,
-.main-yourLibraryX-header {
-  border-radius: calc(var(--vt-radius) - 4px);
-}
-.main-yourLibraryX-libraryContainer,
-.main-yourLibraryX-navBar,
-.main-yourLibraryX-header,
-.main-yourLibraryX-entryPoints {
-  background: transparent !important;
-}
-.main-yourLibraryX-libraryContainer,
-.main-yourLibraryX-libraryRoot,
-.main-yourLibraryX-libraryContent,
-.main-yourLibraryX-navBar,
-.main-view-container,
-.main-view-container__scroll-node,
-.main-view-container__scroll-node-child,
-.main-home-content,
-.Root__right-sidebar .main-nowPlayingView-nowPlayingWidget,
-.Root__right-sidebar .main-nowPlayingView-contextItemInfo {
-  background: transparent !important;
-}
-.Root__nav-bar,
-[data-testid="left-sidebar"] {
-  background:
-    linear-gradient(
-      155deg,
-      rgba(255, 255, 255, 0.055),
-      rgba(var(--vt-accent), 0.035) 46%,
-      rgba(9, 15, 27, 0.38)
-    ) !important;
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.19),
-    inset -1px 0 rgba(255, 255, 255, 0.045),
-    0 16px 48px rgba(0, 0, 0, 0.16);
-}
-.Root__main-view,
-[data-testid="main-view"],
+/* inner wrapper must not double up the panel */
 .main-view-container {
-  background:
-    linear-gradient(
-      155deg,
-      rgba(255, 255, 255, 0.045),
-      rgba(var(--vt-accent), 0.025) 44%,
-      rgba(8, 13, 24, 0.3)
-    ) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    0 16px 48px rgba(0, 0, 0, 0.16);
+  background: transparent !important;
+  border: 0;
+  box-shadow: none;
 }
-.Root__right-sidebar,
-[data-testid="right-sidebar"] {
-  background:
-    linear-gradient(
-      155deg,
-      rgba(255, 255, 255, 0.05),
-      rgba(var(--vt-accent), 0.035) 48%,
-      rgba(8, 13, 24, 0.38)
-    ) !important;
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    inset 1px 0 rgba(255, 255, 255, 0.045),
-    0 16px 48px rgba(0, 0, 0, 0.16);
+/* Full-width wrappers (found by size at runtime in theme.js, so no version-specific
+   class names are needed) must not paint over the glass */
+[data-lc-clear] {
+  background-color: transparent !important;
 }
-.vt-crystal .main-view-container {
-  -webkit-backdrop-filter: blur(30px) saturate(165%);
-  backdrop-filter: blur(30px) saturate(165%);
+.Root__globalNav {
+  background: transparent !important;
 }
-.vt-smooth .main-view-container {
-  -webkit-backdrop-filter: blur(14px) saturate(132%);
-  backdrop-filter: blur(14px) saturate(132%);
+/* Spotify's own coloured tint behind the home page / headers */
+.main-home-homeHeader,
+[class*="homeHeader"] {
+  background: transparent !important;
 }
+
+/* flat mode: no art, solid panels */
+.vt-minimal [data-lc-role],
 .vt-minimal .Root__nav-bar,
 .vt-minimal .Root__main-view,
 .vt-minimal .Root__right-sidebar,
+.vt-minimal .Root__now-playing-bar,
 .vt-minimal [data-testid="left-sidebar"],
 .vt-minimal [data-testid="main-view"],
 .vt-minimal [data-testid="right-sidebar"],
-.vt-minimal .main-view-container {
-  background: rgba(15, 19, 29, 0.94) !important;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+.vt-minimal [data-testid="now-playing-bar"] {
+  --lc-panel-bg: linear-gradient(rgba(15, 19, 29, 0.95), rgba(15, 19, 29, 0.95));
+  --lc-edge: linear-gradient(rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.1));
+  background: var(--lc-panel-bg) !important;
   box-shadow: none;
 }
+
+.main-topBar-container,
+.main-topBar-background {
+  background: rgba(8, 11, 19, 0.2) !important;
+}
+
+/* ---------- rows, cards, headers: flat and cheap ---------- */
+.main-trackList-trackListRow {
+  background: transparent !important;
+  border-radius: calc(var(--vt-radius) - 10px);
+}
+.main-trackList-trackListRow:hover {
+  background: rgba(var(--vt-accent), 0.1) !important;
+}
+.main-trackList-trackListRow[aria-selected="true"],
+.main-trackList-trackListRow[aria-current="true"],
+.main-trackList-trackListRow[data-active="true"] {
+  background: linear-gradient(90deg, rgba(var(--vt-accent), 0.3), rgba(var(--vt-accent), 0.07) 45%, transparent) !important;
+  box-shadow: inset 3px 0 0 rgb(var(--vt-accent));
+}
+.main-card-card,
+[data-encore-id="card"],
+.view-homeShortcutsGrid-shortcut,
 .main-yourLibraryX-entryPoints {
-  border-color: rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(255, 255, 255, calc(0.07 + var(--vt-opacity) * 0.3)), rgba(255, 255, 255, 0.02) 55%, rgba(var(--vt-accent), 0.08)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: calc(var(--vt-radius) - 4px);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 8px 22px rgba(0, 0, 0, 0.12);
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 10px 22px -14px rgba(var(--vt-accent), 0.5);
+  transition:
+    background-color 160ms ease,
+    transform 200ms ease,
+    box-shadow 200ms ease;
+}
+.main-card-card:hover,
+[data-encore-id="card"]:hover,
+.view-homeShortcutsGrid-shortcut:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03) 55%, rgba(var(--vt-accent), 0.22)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.36),
+    0 18px 30px -14px rgba(var(--vt-accent), 0.7);
+  transform: translateY(-3px);
 }
 .main-yourLibraryX-entryPoints:hover {
   background: rgba(var(--vt-accent), 0.1) !important;
-  border-color: rgba(var(--vt-accent), 0.28);
 }
-.main-view-container__scroll-node,
-.main-view-container__scroll-node-child,
-.main-home-content,
-.main-yourLibraryX-libraryContainer,
-.main-yourLibraryX-navBar,
-.main-nowPlayingView-nowPlayingWidget,
-.main-nowPlayingView-contextItemInfo,
-.main-nowPlayingView-lyricsContent {
-  background-color: transparent !important;
+.main-entityHeader-container,
+.main-entityHeader-backgroundColor,
+.main-entityHeader-container [data-seamless-gradient] {
+  background: linear-gradient(160deg, rgba(13, 19, 32, 0.6), rgba(var(--vt-accent), 0.1) 45%, rgba(7, 11, 20, 0.7)) !important;
+  border-radius: calc(var(--vt-radius) - 6px);
+}
+.main-entityHeader-container.main-entityHeader-newEntityHeader {
+  box-sizing: border-box;
+  min-width: 0;
+}
+.main-entityHeader-container.main-entityHeader-newEntityHeader .main-entityHeader-contentWrapper,
+.main-entityHeader-container.main-entityHeader-newEntityHeader .main-entityHeader-headerText {
+  min-width: 0;
+}
+.main-entityHeader-container.main-entityHeader-newEntityHeader .main-entityHeader-imageContainerNew {
+  flex-shrink: 0;
+}
+@container main-view-grid-area (max-width: 600px) {
+  .main-entityHeader-container.main-entityHeader-newEntityHeader.main-entityHeader-standardHeight:not(.main-entityHeader-contentFullBleed)
+    .main-entityHeader-contentWrapper {
+    padding-inline: clamp(12px, 3cqw, 16px) !important;
+  }
+  .main-entityHeader-container.main-entityHeader-newEntityHeader .main-entityHeader-imageContainerNew {
+    width: clamp(88px, 23cqw, 128px) !important;
+    height: clamp(88px, 23cqw, 128px) !important;
+    margin-inline-end: clamp(10px, 2cqw, 16px) !important;
+  }
+  .main-entityHeader-container.main-entityHeader-newEntityHeader .main-entityHeader-headerText {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+.main-card-imageContainer,
+.main-cardImage-image,
+.main-entityHeader-image {
+  border-radius: calc(var(--vt-radius) - 10px);
+}
+.main-cardImage-image {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22);
 }
 .Root__right-sidebar .main-nowPlayingView-lyricsContent,
 .Root__right-sidebar [data-testid="lyrics-card"] {
-  background: linear-gradient(
-    145deg,
-    rgba(var(--vt-accent), 0.1),
-    rgba(255, 255, 255, 0.045)
-  ) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(145deg, rgba(var(--vt-accent), 0.14), rgba(var(--vt-accent2), 0.08)) !important;
   border-radius: calc(var(--vt-radius) - 8px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
+
+/* ---------- nav ---------- */
 .main-navBar-navBarLink:hover,
 .main-yourLibraryX-navLink:hover {
   background: rgba(var(--vt-accent), 0.12) !important;
@@ -286,210 +359,41 @@ body::before {
   background: rgba(var(--vt-accent), 0.16) !important;
   box-shadow: inset 2px 0 rgba(var(--vt-accent), 0.9);
 }
-.main-card-card,
-.main-trackList-trackListRow,
-.main-entityHeader-container,
-.main-entityHeader-backgroundColor,
-.main-contextMenu-menu,
-.main-yourLibraryX-entryPoints {
-  border: 1px solid rgba(255, 255, 255, 0.075);
-  background: linear-gradient(
-    145deg,
-    rgba(255, 255, 255, calc(0.025 + var(--vt-opacity) * 0.28)),
-    rgba(var(--vt-accent), calc(0.018 + var(--vt-opacity) * 0.09)) 48%,
-    rgba(10, 15, 26, calc(0.08 + var(--vt-opacity) * 0.3))
-  ) !important;
-  border-radius: calc(var(--vt-radius) - 8px);
-  transition:
-    background 180ms ease,
-    border-color 180ms ease,
-    transform 180ms ease;
-}
-.main-entityHeader-container.main-entityHeader-newEntityHeader,
-.main-entityHeader-backgroundColor,
-.main-entityHeader-container [data-seamless-gradient] {
-  background:
-    linear-gradient(
-      160deg,
-      rgba(13, 19, 32, 0.76),
-      rgba(var(--vt-accent), 0.055) 42%,
-      rgba(7, 11, 20, 0.82)
-    ) !important;
-  background-color: rgba(8, 12, 22, 0.82) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(145%);
-  backdrop-filter: blur(24px) saturate(145%);
-  border-color: rgba(255, 255, 255, 0.11);
-}
-.vt-smooth .main-entityHeader-container.main-entityHeader-newEntityHeader,
-.vt-smooth .main-entityHeader-backgroundColor,
-.vt-smooth .main-entityHeader-container [data-seamless-gradient] {
-  -webkit-backdrop-filter: blur(12px) saturate(125%);
-  backdrop-filter: blur(12px) saturate(125%);
-}
-.vt-minimal .main-entityHeader-container.main-entityHeader-newEntityHeader,
-.vt-minimal .main-entityHeader-backgroundColor,
-.vt-minimal .main-entityHeader-container [data-seamless-gradient] {
-  background: rgba(18, 22, 31, 0.94) !important;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  box-shadow: none;
-}
-.main-entityHeader-container.main-entityHeader-newEntityHeader {
-  box-sizing: border-box;
-  min-width: 0;
-  transition:
-    background-color 260ms ease,
-    border-color 260ms ease;
-}
-.main-entityHeader-container.main-entityHeader-newEntityHeader
-  .main-entityHeader-contentWrapper,
-.main-entityHeader-container.main-entityHeader-newEntityHeader
-  .main-entityHeader-headerText {
-  min-width: 0;
-}
-.main-entityHeader-container.main-entityHeader-newEntityHeader
-  .main-entityHeader-imageContainerNew {
-  flex-shrink: 0;
-  transition:
-    width 260ms ease,
-    height 260ms ease,
-    border-radius 260ms ease;
-}
-@container main-view-grid-area (max-width: 600px) {
-  .main-entityHeader-container.main-entityHeader-newEntityHeader.main-entityHeader-standardHeight:not(.main-entityHeader-contentFullBleed)
-    .main-entityHeader-contentWrapper {
-    padding-inline: clamp(12px, 3cqw, 16px) !important;
-  }
-  .main-entityHeader-container.main-entityHeader-newEntityHeader
-    .main-entityHeader-imageContainerNew {
-    width: clamp(88px, 23cqw, 128px) !important;
-    height: clamp(88px, 23cqw, 128px) !important;
-    margin-inline-end: clamp(10px, 2cqw, 16px) !important;
-  }
-  .main-entityHeader-container.main-entityHeader-newEntityHeader
-    .main-entityHeader-headerText {
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-}
-.main-card-card:hover,
-.main-trackList-trackListRow:hover,
-.main-contextMenu-menu :is(button, a):hover {
-  background: linear-gradient(
-    145deg,
-    rgba(var(--vt-accent), 0.2),
-    rgba(255, 255, 255, 0.075)
-  ) !important;
-  border-color: rgba(var(--vt-accent), 0.36);
-}
-.main-card-card:hover {
-  transform: translateY(-2px);
-  box-shadow:
-    0 12px 28px rgba(0, 0, 0, 0.24),
-    0 0 24px rgba(var(--vt-accent), 0.1);
-}
-.main-trackList-trackListRow,
-.main-yourLibraryX-entryPoints,
-.main-contextMenu-menu,
-.main-card-card {
-  -webkit-backdrop-filter: blur(18px) saturate(145%);
-  backdrop-filter: blur(18px) saturate(145%);
-}
-.main-trackList-trackListRow[aria-selected="true"],
-.main-trackList-trackListRow[aria-current="true"],
-.main-trackList-trackListRow[data-active="true"] {
-  background:
-    linear-gradient(
-      110deg,
-      rgba(var(--vt-accent), 0.2),
-      rgba(var(--vt-accent), 0.07) 62%,
-      rgba(255, 255, 255, 0.025)
-    ) !important;
-  border-color: rgba(var(--vt-accent), 0.28);
-  box-shadow: inset 2px 0 rgba(var(--vt-accent), 0.85);
-}
-.main-yourLibraryX-entryPoints,
-.main-searchBar-searchBar,
-.main-userWidget-box {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 8px 24px rgba(0, 0, 0, 0.12);
-}
-.vt-crystal .main-card-card,
-.vt-crystal .main-contextMenu-menu,
-.vt-crystal .main-yourLibraryX-entryPoints,
-.vt-crystal .GenericModal,
-.vt-crystal [role="dialog"],
-.vt-crystal [data-testid="context-menu"] {
-  -webkit-backdrop-filter: blur(22px) saturate(155%);
-  backdrop-filter: blur(22px) saturate(155%);
-}
-.vt-smooth .main-card-card,
-.vt-smooth .main-contextMenu-menu,
-.vt-smooth .main-yourLibraryX-entryPoints,
-.vt-smooth .GenericModal,
-.vt-smooth [role="dialog"],
-.vt-smooth [data-testid="context-menu"] {
-  -webkit-backdrop-filter: blur(10px) saturate(125%);
-  backdrop-filter: blur(10px) saturate(125%);
-}
-.vt-minimal .main-card-card,
-.vt-minimal .main-trackList-trackListRow,
-.vt-minimal .main-entityHeader-container,
-.vt-minimal .main-entityHeader-backgroundColor,
-.vt-minimal .main-contextMenu-menu,
-.vt-minimal .main-yourLibraryX-entryPoints,
-.vt-minimal .GenericModal,
-.vt-minimal [role="dialog"],
-.vt-minimal [data-testid="context-menu"] {
-  background: rgba(18, 22, 31, 0.94) !important;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  box-shadow: none;
-}
+
+/* ---------- menus & dialogs (transient: real blur is fine, Liquid Glass only) ---------- */
 .GenericModal,
 [role="dialog"],
-[data-testid="context-menu"] {
-  background: linear-gradient(
-    145deg,
-    rgba(30, 38, 54, calc(0.35 + var(--vt-opacity))),
-    rgba(12, 17, 27, calc(0.55 + var(--vt-opacity)))
-  ) !important;
-  border: 1px solid rgba(255, 255, 255, 0.13);
+[data-testid="context-menu"],
+.main-contextMenu-menu {
+  background: linear-gradient(145deg, rgba(30, 38, 54, calc(0.6 + var(--vt-opacity))), rgba(12, 17, 27, calc(0.8 + var(--vt-opacity)))) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--vt-radius);
-  box-shadow: 0 20px 64px rgba(0, 0, 0, 0.42);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
 }
-.main-card-imageContainer,
-.main-cardImage-image,
-.main-entityHeader-image {
-  border-radius: calc(var(--vt-radius) - 10px);
+.vt-crystal .GenericModal,
+.vt-crystal [role="dialog"],
+.vt-crystal [data-testid="context-menu"],
+.vt-crystal .main-contextMenu-menu {
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
 }
-.main-cardImage-image {
-  box-shadow:
-    0 10px 28px rgba(0, 0, 0, 0.24),
-    0 0 0 1px rgba(255, 255, 255, 0.08);
+.main-contextMenu-menu :is(button, a):hover {
+  background: rgba(var(--vt-accent), 0.2) !important;
 }
+
+/* ---------- controls ---------- */
 .main-playButton-PlayButton,
 .main-playPauseButton-button,
 .main-playButton-PlayButton button {
   background: rgb(var(--vt-accent)) !important;
   color: #08111e !important;
-  box-shadow:
-    0 5px 18px rgba(var(--vt-accent), 0.34),
-    inset 0 1px 0 rgba(255, 255, 255, 0.32);
-  transition:
-    transform 180ms ease,
-    box-shadow 180ms ease,
-    filter 180ms ease;
+  box-shadow: 0 4px 14px rgba(var(--vt-accent), 0.35);
+  transition: transform 160ms ease;
 }
 .main-playButton-PlayButton:hover,
 .main-playPauseButton-button:hover,
 .main-playButton-PlayButton button:hover {
-  filter: brightness(1.08);
   transform: scale(1.045);
-  box-shadow:
-    0 7px 24px rgba(var(--vt-accent), 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.38);
 }
 .x-progressBar-fillColor,
 .progress-bar__fg {
@@ -505,49 +409,28 @@ body::before {
 .main-userWidget-box,
 .main-tag-container,
 .main-filterChips-filter {
-  background: rgba(
-    255,
-    255,
-    255,
-    calc(0.035 + var(--vt-opacity) * 0.3)
-  ) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, calc(0.04 + var(--vt-opacity) * 0.3)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 999px !important;
-}
-.vt-crystal .main-searchBar-searchBar,
-.vt-crystal .main-searchBar-searchBarContainer,
-.vt-crystal .main-userWidget-box,
-.vt-crystal .main-tag-container,
-.vt-crystal .main-filterChips-filter {
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
-}
-.vt-smooth .main-searchBar-searchBar,
-.vt-smooth .main-searchBar-searchBarContainer,
-.vt-smooth .main-userWidget-box,
-.vt-smooth .main-tag-container,
-.vt-smooth .main-filterChips-filter {
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-}
-.vt-minimal .main-searchBar-searchBar,
-.vt-minimal .main-searchBar-searchBarContainer,
-.vt-minimal .main-userWidget-box,
-.vt-minimal .main-tag-container,
-.vt-minimal .main-filterChips-filter {
-  background: rgba(255, 255, 255, 0.06) !important;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
 }
 .main-filterChips-filter[aria-checked="true"],
 .main-filterChips-filter[aria-selected="true"] {
-  background: rgba(var(--vt-accent), 0.22) !important;
+  background: rgba(var(--vt-accent), 0.24) !important;
   border-color: rgba(var(--vt-accent), 0.45);
-  box-shadow: 0 0 18px rgba(var(--vt-accent), 0.12);
 }
-.main-nowPlayingBar-container,
-.main-nowPlayingView-nowPlayingWidget {
+.main-nowPlayingBar-container {
   background: transparent !important;
+}
+
+/* ---------- pill playbar ---------- */
+.vt-pill .Root__now-playing-bar,
+.vt-pill [data-testid="now-playing-bar"] {
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  overflow: visible;
 }
 .vt-pill .main-nowPlayingBar-container {
   display: flex !important;
@@ -566,10 +449,7 @@ body::before {
   box-sizing: border-box !important;
   border: 0 !important;
   border-radius: 0 !important;
-  background: transparent !important;
   box-shadow: none !important;
-  -webkit-backdrop-filter: none !important;
-  backdrop-filter: none !important;
 }
 .vt-pill .main-nowPlayingBar-nowPlayingBar {
   display: flex !important;
@@ -588,21 +468,14 @@ body::before {
   margin: 0 !important;
   padding: 0 18px !important;
   box-sizing: border-box;
-  background:
-    linear-gradient(
-      112deg,
-      rgba(7, 13, 26, 0.72),
-      rgba(var(--vt-accent), 0.12) 34%,
-      rgba(13, 22, 39, 0.68) 68%,
-      rgba(7, 13, 26, 0.76)
-    ) !important;
+  background: linear-gradient(112deg, rgba(7, 13, 26, 0.8), rgba(var(--vt-accent), 0.16) 34%, rgba(var(--vt-accent2), 0.12) 70%, rgba(7, 13, 26, 0.82)) !important;
   box-shadow:
-    0 14px 44px -12px rgba(var(--vt-accent), 0.4),
-    0 6px 22px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.24),
-    inset 0 0 22px rgba(var(--vt-accent), 0.045);
-  -webkit-backdrop-filter: blur(26px) saturate(160%) !important;
-  backdrop-filter: blur(26px) saturate(160%) !important;
+    0 10px 28px -10px rgba(var(--vt-accent), 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+.vt-crystal.vt-pill .main-nowPlayingBar-nowPlayingBar {
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  backdrop-filter: blur(22px) saturate(150%);
 }
 .vt-pill .main-nowPlayingBar-left {
   display: flex !important;
@@ -630,20 +503,6 @@ body::before {
   justify-content: flex-end !important;
   overflow: visible !important;
 }
-.vt-pill .main-nowPlayingBar-right :is(
-  [data-testid="control-button-queue"],
-  [data-testid="control-button-device-picker"],
-  [data-testid="control-button-mini-player"],
-  [data-testid="control-button-lyrics"],
-  button[aria-label="Queue"],
-  button[aria-label="Connect to a device"],
-  button[aria-label="Open Miniplayer"],
-  button[aria-label="Miniplayer"],
-  button[aria-label="Lyrics"],
-  button[aria-label="Show lyrics"]
-) {
-  display: none !important;
-}
 .vt-pill .main-nowPlayingBar-coverArt,
 .vt-pill .main-nowPlayingBar-left .cover-art,
 .vt-pill [data-testid="now-playing-bar"] [data-testid="cover-art"] {
@@ -652,6 +511,12 @@ body::before {
   min-width: 56px !important;
   min-height: 56px !important;
   flex: 0 0 56px !important;
+}
+.vt-pill .main-nowPlayingBar-coverArt img,
+.vt-pill .main-nowPlayingBar-coverArt .cover-art-image {
+  width: 56px !important;
+  height: 56px !important;
+  object-fit: cover;
 }
 .vt-pill .main-nowPlayingBar-left :is(.main-nowPlayingBar-trackName, .main-nowPlayingBar-artistName, [data-testid="context-item-info"]) {
   min-width: 0;
@@ -665,12 +530,6 @@ body::before {
 }
 .vt-pill .main-nowPlayingBar-center > * {
   min-width: 0 !important;
-}
-.vt-pill .main-nowPlayingBar-coverArt img,
-.vt-pill .main-nowPlayingBar-coverArt .cover-art-image {
-  width: 56px !important;
-  height: 56px !important;
-  object-fit: cover;
 }
 @media (max-width: 900px) {
   .vt-pill .main-nowPlayingBar-container {
@@ -689,6 +548,16 @@ body::before {
     flex-basis: 28% !important;
     width: 28% !important;
   }
+  /* only on narrow windows do we trim extra buttons to make room */
+  .vt-pill .main-nowPlayingBar-right :is(
+    [data-testid="control-button-device-picker"],
+    [data-testid="control-button-mini-player"],
+    button[aria-label="Connect to a device"],
+    button[aria-label="Open Miniplayer"],
+    button[aria-label="Miniplayer"]
+  ) {
+    display: none !important;
+  }
 }
 @media (max-width: 560px) {
   .vt-pill .main-nowPlayingBar-nowPlayingBar {
@@ -700,7 +569,6 @@ body::before {
   }
   .vt-pill .main-nowPlayingBar-container {
     width: calc(100vw - 16px) !important;
-    max-width: none !important;
     padding-bottom: 4px !important;
   }
   .vt-pill .main-nowPlayingBar-left {
@@ -728,12 +596,13 @@ body::before {
     flex-basis: 46px !important;
   }
 }
+
+/* ---------- misc ---------- */
 button,
 [role="button"] {
   transition:
-    background-color 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease;
+    background-color 140ms ease,
+    color 140ms ease;
 }
 button:focus-visible,
 [role="button"]:focus-visible,
@@ -746,12 +615,11 @@ a:focus-visible {
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(var(--vt-accent), 0.48);
+  background: rgba(var(--vt-accent), 0.5);
 }
+
+/* ---------- vinyl ---------- */
 @keyframes vt-spin {
-  from {
-    transform: rotate(0deg);
-  }
   to {
     transform: rotate(360deg);
   }
@@ -762,12 +630,11 @@ a:focus-visible {
   border-radius: 50% !important;
   overflow: hidden !important;
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.55);
-  transform-origin: center;
   animation: vt-spin 6s linear infinite paused !important;
-  will-change: transform;
 }
 .vt-vinyl .vt-vinyl-artwork.vt-vinyl-playing {
   animation-play-state: running !important;
+  will-change: transform;
 }
 .vt-vinyl .vt-vinyl-artwork::after {
   content: "";
@@ -775,22 +642,13 @@ a:focus-visible {
   inset: 0;
   z-index: 2;
   border-radius: inherit;
-  background:
-    radial-gradient(
-      circle at center,
-      rgba(8, 12, 20, 0.84) 0 2px,
-      rgba(255, 255, 255, 0.7) 2.5px 3px,
-      transparent 3.5px
-    ),
-    repeating-radial-gradient(
-      circle at center,
-      transparent 0 3px,
-      rgba(255, 255, 255, 0.1) 3.5px,
-      rgba(0, 0, 0, 0.18) 4px,
-      transparent 4.5px 6px
-    );
   pointer-events: none;
+  background:
+    radial-gradient(circle at center, rgba(8, 12, 20, 0.84) 0 2px, rgba(255, 255, 255, 0.7) 2.5px 3px, transparent 3.5px),
+    repeating-radial-gradient(circle at center, transparent 0 3px, rgba(255, 255, 255, 0.1) 3.5px, rgba(0, 0, 0, 0.18) 4px, transparent 4.5px 6px);
 }
+
+/* ---------- settings panel ---------- */
 .vt-panel {
   display: grid;
   gap: 12px;
@@ -841,7 +699,144 @@ a:focus-visible {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
-  .vt-vinyl .vt-vinyl-artwork {
+  .vt-vinyl .vt-vinyl-artwork,
+  .lc-aurora i {
     animation: none !important;
   }
+}
+
+/* =====================================================================
+   ULTRA tier (opt-in). Heavier effects, still scoped to small surfaces.
+   Ultra also carries .vt-crystal, so anything here that a browser
+   doesn't understand silently falls back to the Liquid Glass look.
+   ===================================================================== */
+
+/* film grain over the static backdrop (one layer, painted once) */
+.vt-ultra #lucent-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0.07;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .6 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* crisper edge lighting on the big panels */
+.vt-ultra [data-lc-role],
+.vt-ultra .Root__nav-bar,
+.vt-ultra .Root__main-view,
+.vt-ultra .Root__right-sidebar,
+.vt-ultra [data-testid="left-sidebar"],
+.vt-ultra [data-testid="main-view"],
+.vt-ultra [data-testid="right-sidebar"] {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    0 26px 56px -20px rgba(var(--lc-tint), 0.62),
+    0 14px 36px rgba(0, 0, 0, 0.32);
+}
+
+/* liquid refraction on the pill playbar (Chromium SVG backdrop filter) */
+.vt-ultra.vt-pill .main-nowPlayingBar-nowPlayingBar {
+  -webkit-backdrop-filter: blur(5px) saturate(175%) url(#lucent-liquid);
+  backdrop-filter: blur(5px) saturate(175%) url(#lucent-liquid);
+  box-shadow:
+    0 14px 38px -10px rgba(var(--vt-accent), 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    inset 0 0 26px rgba(var(--vt-accent), 0.08);
+}
+
+/* cursor-following light: JS only updates the ONE element under the pointer */
+.vt-ultra .main-card-card,
+.vt-ultra.vt-pill .main-nowPlayingBar-nowPlayingBar {
+  --lo: 0;
+}
+.vt-ultra .main-card-card {
+  position: relative;
+  transition:
+    transform 0.38s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color 0.2s ease;
+  background:
+    radial-gradient(
+      200px circle at var(--lx, 50%) var(--ly, 50%),
+      rgba(255, 255, 255, calc(0.16 * var(--lo))),
+      rgba(var(--vt-accent), calc(0.14 * var(--lo))) 55%,
+      transparent 100%
+    ),
+    rgba(255, 255, 255, calc(0.09 + var(--vt-opacity) * 0.3)) !important;
+}
+.vt-ultra .main-card-card:hover {
+  transform: translateY(-5px) scale(1.018);
+}
+.vt-ultra.vt-pill .main-nowPlayingBar-nowPlayingBar {
+  background:
+    radial-gradient(
+      260px circle at var(--lx, 50%) var(--ly, 50%),
+      rgba(255, 255, 255, calc(0.13 * var(--lo))),
+      transparent 70%
+    ),
+    linear-gradient(112deg, rgba(7, 13, 26, 0.74), rgba(var(--vt-accent), 0.18) 34%, rgba(var(--vt-accent2), 0.14) 70%, rgba(7, 13, 26, 0.78)) !important;
+}
+/* springy play button */
+.vt-ultra .main-playButton-PlayButton,
+.vt-ultra .main-playPauseButton-button,
+.vt-ultra .main-playButton-PlayButton button {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.vt-ultra .main-playPauseButton-button:active,
+.vt-ultra .main-playButton-PlayButton button:active {
+  transform: scale(0.94);
+}
+
+/* lyrics extensions (Beautiful / Spicy / Lucid Lyrics): keep them inside the rounded glass */
+#BeautifulLyricsPage,
+#SpicyLyricsPage,
+[id*="BeautifulLyrics"],
+[id*="SpicyLyrics"],
+[class*="BeautifulLyrics"],
+[class*="SpicyLyrics"],
+[class*="LucidLyrics"],
+[class*="lucid-lyrics"] {
+  border-radius: calc(var(--vt-radius) - 4px);
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vt-ultra .main-card-card:hover {
+    transform: none;
+  }
+}
+
+/* ---------- Windows window controls (min/max/close sit over the top-right) ---------- */
+/* uses the real overlay geometry when the host exposes it, else the slider value */
+.vt-win.vt-wc-main .main-topBar-container {
+  padding-inline-end: max(
+    var(--vt-wc-w, 140px),
+    calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw))
+  ) !important;
+}
+
+/* ---------- font (set from Lucent settings; JS adds .vt-font + --lc-font) ---------- */
+/* Spotify sets its font per-element, so a global rule is the only reliable override.
+   Lyrics-extension pages keep their own typography. */
+.vt-font :where(body, body *):not(
+    :is(
+        #BeautifulLyricsPage,
+        #SpicyLyricsPage,
+        [id*="BeautifulLyrics"],
+        [id*="SpicyLyrics"],
+        [class*="BeautifulLyrics"],
+        [class*="SpicyLyrics"],
+        [class*="LucidLyrics"],
+        [class*="lucid-lyrics"]
+      )
+      *
+  ) {
+  font-family: var(--lc-font) !important;
+}
+
+/* Spotify's "tinted" boxes (library rows, tiles) paint solid grey: make them see-through glass */
+[class*="-box--tinted"] {
+  background-color: rgba(255, 255, 255, 0.06) !important;
 }
