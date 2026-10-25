@@ -32,11 +32,20 @@ If you want the original, go and star it: https://github.com/NMWplays/Liquify
 
 ## Install
 
-**Windows:** unzip, then double-click **`install.bat`**. It installs Spicetify if you don't have it, copies the theme, and applies it. You need the Spotify desktop app from spotify.com (not the Microsoft Store version). Don't run it as administrator.
+1. Install and configure [Spicetify](https://spicetify.app/docs/getting-started/) for the Spotify desktop app. If this is your first Spicetify setup, run `spicetify backup apply` once before installing a theme.
+2. Create a `Lucent` folder inside Spicetify's `Themes` folder:
+   - **Windows:** `%appdata%\spicetify\Themes\Lucent`
+   - **macOS / Linux:** `~/.config/spicetify/Themes/Lucent`
+3. Copy `color.ini`, `manifest.json`, `theme.js`, and `user.css` from this repository into that folder.
+4. In a terminal, select and apply Lucent:
 
-**macOS / Linux:** unzip, then run `sh install.sh`.
+   ```sh
+   spicetify config current_theme Lucent
+   spicetify config color_scheme Lucent
+   spicetify apply
+   ```
 
-Then **fully quit and reopen Spotify**, and open **Spicetify menu > Lucent settings**.
+Fully quit and reopen Spotify, then open **Spicetify menu > Lucent settings**.
 
 ## Settings
 
